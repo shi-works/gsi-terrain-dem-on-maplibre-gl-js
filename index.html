@@ -1,0 +1,232 @@
+<html>
+
+<head>
+    <title>浸水想定図（GaoJSON）</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src='https://unpkg.com/maplibre-gl@3.0.1/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@3.0.1/dist/maplibre-gl.css' rel='stylesheet' />
+    <script src='maplibre-gl-gsi-terrain.js'></script>
+    <script src="https://unpkg.com/pmtiles@2.7.0/dist/index.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .legend {
+            position: fixed;
+            right: 10px;
+            bottom: 50px;
+            z-index: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="legend">
+        <img src="LEGEND.PNG" alt="Legend">
+    </div>
+    <script type="text/javascript">
+        // add the PMTiles plugin to the maplibregl global.
+        let protocol = new pmtiles.Protocol();
+        maplibregl.addProtocol("pmtiles", protocol.tile);
+
+        // PLATEAU 2020_lod1_Building
+        let PM_PLATEAU_lod1_Building_URL = "https://pmtiles-data.s3.ap-northeast-1.amazonaws.com/plateau/PLATEAU_2020_LOD1.pmtiles";
+
+        const p = new pmtiles.PMTiles(PM_PLATEAU_lod1_Building_URL)
+        protocol.add(p);
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://tile2.openstreetmap.jp/styles/osm-bright/style.json',
+            zoom: 14,
+            minZoom: 1,
+            maxZoom: 23,
+            pitch: 60,
+            bearing: 45,
+            center: [138.76833, 35.13958],
+            hash: true,
+            attributionControl: false
+        });
+
+        // ズーム・回転
+        map.addControl(new maplibregl.NavigationControl());
+
+        // フルスクリーンモードのオンオフ
+        map.addControl(new maplibregl.FullscreenControl());
+
+        // 現在位置表示
+        map.addControl(new maplibregl.GeolocateControl({
+            positionOptions: {
+                enableHighAccuracy: false
+            },
+            fitBoundsOptions: { maxZoom: 18 },
+            trackUserLocation: true,
+            showUserLocation: true
+        }));
+
+        // スケール表示
+        map.addControl(new maplibregl.ScaleControl({
+            maxWidth: 200,
+            unit: 'metric'
+        }));
+
+        // Attributionを折りたたみ表示
+        map.addControl(new maplibregl.AttributionControl({
+            compact: true,
+            customAttribution: '（<a href="https://twitter.com/syanseto" target="_blank">Twitter</a> | <a href="https://github.com/shi-works/hazard-map" target="_blank">Github</a>） '
+        }));
+
+        // 3D地形コントロール
+        map.addControl(
+            new maplibregl.TerrainControl({
+                source: 'gsidem',
+                exaggeration: 1 // 標高を強調する倍率
+            })
+        );
+
+        map.on('load', () => {
+            // 標高タイル
+            map.addSource("gsidem", {
+                type: 'raster-dem',
+                tiles: [
+                    'gsidem://https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png',
+                ],
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html#dem" target="_blank">地理院タイル(標高タイル)</a>',
+                tileSize: 256
+            });
+
+            map.setTerrain({ 'source': 'gsidem', 'exaggeration': 1 });
+
+            // 陰影起伏図
+            map.addSource("hillshade", {
+                type: 'raster',
+                tiles: [
+                    'https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png',
+                ],
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html#hillshademap" target="_blank">地理院タイル(陰影起伏図)</a>',
+                tileSize: 256
+            });
+
+            map.addLayer({
+                id: 'hillshade-tiles',
+                type: 'raster',
+                source: 'hillshade',
+                minzoom: 2,
+                maxzoom: 18,
+                paint: {
+                    'raster-opacity': 0.5
+                }
+            });
+
+            /*
+            // 色別標高図
+            map.addSource("relief", {
+                type: 'raster',
+                tiles: [
+                    'https://cyberjapandata.gsi.go.jp/xyz/relief/{z}/{x}/{y}.png',
+                ],
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html#relief" target="_blank">地理院タイル(色別標高図)</a>',
+                tileSize: 256
+            });
+
+            map.addLayer({
+                id: 'relief-tiles',
+                type: 'raster',
+                source: 'relief',
+                minzoom: 2,
+                maxzoom: 18,
+                paint: {
+                    'raster-opacity': 0.5
+                }
+            });
+            */
+
+            /*
+            // 令和2年7月豪雨 浸水推定図 球磨川水系球磨川 人吉市周辺（2020年7月4日13時作成）
+            map.addSource("flood", {
+                type: "raster",
+                tiles: ["https://cyberjapandata.gsi.go.jp/xyz/20200703oame_kumagawahitoyoshi_0704dansaizu/{z}/{x}/{y}.png"],
+                tileSize: 256,
+                attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html#t20200703oame_kumagawahitoyoshi_0704dansaizu" target="_blank">地理院タイル(令和2年7月豪雨 浸水推定図 球磨川水系球磨川 人吉市周辺（2020年7月4日13時作成）)</a>'
+            });
+
+            map.addLayer({
+                id: "flood_tiles",
+                type: "raster",
+                source: "flood",
+                minzoom: 2,
+                maxzoom: 18,
+                paint: {
+                    'raster-opacity': 1.0
+                },
+                layout: {
+                    'visibility': 'visible'
+                }
+            });
+            */
+
+            // 令和5年梅雨前線による大雨及び台風第2号 静岡県沼津市桃里周辺 推定浸水域データ
+            map.addSource("floodarea", {
+                type: "geojson",
+                data: "./floodarea.geojson",
+                attribution: '<a href="https://xview.bosai.go.jp/view/index.html?appid=4decdc6e44e041abb9309061516ff50c">防災科研 「令和5年梅雨前線による大雨及び台風第2号 静岡県沼津市桃里周辺 推定浸水域データ」</a>'
+            });
+
+            map.addLayer({
+                id: 'floodarea-fill',
+                type: 'fill',
+                source: 'floodarea',
+                paint: {
+                    // 浸水深で色分け
+                    'fill-color': [
+                        'match',
+                        ['get', '浸水深'],
+                        '0.5m未満', 'rgba(136, 185, 248, 1)',
+                        '0.5m以上1m未満', 'rgba(44, 133, 248, 1)',
+                        '1m以上2m未満', 'rgba(44, 117, 227, 1)',
+                        '2m以上', 'rgba(44, 104, 177, 1)',
+                        'rgba(0, 0, 0, 1)'
+                    ],
+                    'fill-opacity': 0.8,
+                }
+            });
+
+            // PLATEAUベクトルタイル
+            map.addSource("lod1-Building", {
+                type: "vector",
+                // url: "pmtiles://" + PM_13100_tokyo_23ku_lod1_Building_URL,
+                url: "pmtiles://" + PM_PLATEAU_lod1_Building_URL,
+                attribution: '<a href="https://www.geospatial.jp/ckan/dataset/plateau">3D都市モデル「Project PLATEAU」 建築物（国土交通省）を加工して作成</a>'
+            });
+
+            // PLATEAUベクトルタイル
+            map.addLayer({
+                'id': 'lod1-Building',
+                'source': 'lod1-Building',
+                'source-layer': 'PLATEAU_2020_LOD1fgb',
+                "minzoom": 12,
+                "maxzoom": 18,
+                'layout': {
+                    'visibility': 'visible',
+                },
+                'type': 'fill-extrusion',
+                'paint': {
+                    "fill-extrusion-color": "#aaa",
+                    "fill-extrusion-opacity": 1.0,
+                    "fill-extrusion-height": ["get", "bldg_measuredHeight"]
+                }
+            });
+
+        })
+    </script>
+</body>
+
+</html>
